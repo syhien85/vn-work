@@ -1,0 +1,60 @@
+package root.jobschedule;
+
+import Project3.root.dto.BillDTO;
+import Project3.root.dto.PageDTO;
+import Project3.root.dto.SearchBillDTO;
+import Project3.root.entity.User;
+import Project3.root.repository.UserRepo;
+import Project3.root.service.BillService;
+import Project3.root.service.EmailService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import static java.time.temporal.ChronoUnit.*;
+
+@RequiredArgsConstructor
+@Slf4j
+@Component
+public class JobScheduleBillEmail {
+
+    private final BillService billService;
+    private final EmailService emailService;
+
+    /**
+     * Kiểm tra và gửi email đơn hàng mới cho quản trị viên (check 5 phút 1 lần)
+     */
+    @Scheduled(cron = "0 */5 * * * *") // 5 minutes
+    public void cronSendNewBillToAdminEvery5Minus() {
+
+        Date fiveMinuteBefore = Date.from(Instant.now().minus(5, MINUTES));
+        Date today = Date.from(Instant.now());
+
+        SearchBillDTO searchDTO = new SearchBillDTO();
+        searchDTO.setStart(fiveMinuteBefore);
+        searchDTO.setEnd(today);
+
+        // tìm các đơn hàng start: 5 phút trước, end: now
+        int page = 0;
+        while (true) {
+            searchDTO.setCurrentPage(page);
+            PageDTO<BillDTO> billDTOs = billService.searchService(searchDTO);
+            if (billDTOs != null) {
+                for (BillDTO billDTO : billDTOs.getData()) {
+                    emailService.sendBillCreateEmail(billDTO.getUser().getEmail(), "Shop Admin", billDTO);
+//                    log.warn("New bill #%s created".formatted(billDTO.getId()));
+                }
+                page++;
+                if (page > billDTOs.getTotalPage()) break;
+            }
+        }
+    }
+}
